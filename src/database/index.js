@@ -1,4 +1,13 @@
-const { Async, Maybe, curry } = require('crocks')
+const {
+	Async,
+	List,
+	Maybe,
+	compose,
+	curry,
+	flip,
+	pick
+} = require('crocks')
+const { serverError } = require('../app/error')
 const models = require('./models')
 const mongoose = require('mongoose')
 
@@ -23,21 +32,56 @@ const connectDatabase = (url) => Async((rej, res) => {
 		})
 	})
 })
-
+// find :: a -> b -> Async e 
 const find = curry((model, query) => 
 	Async((rej, res) => mongoose.model(model).find(query)
-		.then(doc => res(Maybe.fromNullable(doc)))
-		.catch(rej)
+		.then(res)
+		.catch(compose(rej, serverError(500)))
 	))
-
+// findAll :: a -> Async e docs	
+const findAll = flip(find)({})
+// count :: String -> a -> Async e Number
+const count = curry((model, query) => 
+	Async((rej, res) => mongoose.model(model).count(query)
+		.then(res)
+		.catch(rej)))
+// create :: a -> b -> Async e doc
 const create = curry((model, data) => 
 	Async((rej, res) => mongoose.model(model).create(data)
 		.then(res)
-		.catch(rej)
+		.catch(compose(rej, serverError(500)))
 	))
-
+// createUnique :: a -> String -> b -> Async e b
+const createUnique = curry((model, property, data) => 
+	count(model, pick([property], data))
+		.chain(n => n > 0 
+			? Async.Rejected(serverError(409, model + ' with ' + property + ' ' + data[property] + ' already exists.'))
+			: Async.Resolved(data)
+		)
+		.chain(create(model))
+)
+// findById :: a -> b -> Async e doc
+const findById = curry((model, id) => 
+	Async((rej, res) => mongoose.model(model).findById(id)
+		.then(doc => doc 
+			? res(doc)
+			: rej(serverError(404, 'Cannot find ' + model + ' with _id: ' + id)))
+		.catch(compose(rej, serverError(500)))
+	))
+// removeById :: String -> String -> Async e a
+const removeById = curry((model, id) => 
+	Async((rej, res) => mongoose.model(model).findByIdAndRemove(id)
+		.then(docs => docs 
+			? res(docs) 
+			: rej(serverError(404, 'Cannot find ' + model + 'with _id: ' + id)))
+		.catch(compose(rej, serverError(500)))
+	))
 module.exports = {
 	connectDatabase,
+	find,
+	findAll,
 	create,
-	find
+	createUnique,
+	findById,
+	removeById
 }

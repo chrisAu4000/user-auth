@@ -1,3 +1,6 @@
+const dotenv = require('dotenv')
+dotenv.load();
+const config = require('../config')
 const { assert } = require('chai')
 const app = require('../src/app')
 
@@ -6,7 +9,7 @@ describe('Application', () => {
 		assert.isFunction(app)
 	})
 	it('should return an Async', () => {
-		assert.equal(app().type(), 'Async')
+		assert.equal(app(config).type(), 'Async')
 	})
 	// it('should fork a http-server and a https-server', (done) => {
 	// 	app().fork(

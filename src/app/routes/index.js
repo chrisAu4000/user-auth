@@ -1,53 +1,83 @@
 const { 
-	Async, 
+	Async,
+	List,
 	Maybe,
-	curry, 
-	safe, 
-	isString,
+	chain,
+	compose,
+	curry,
+	head,
 	isObject,
+	isString,
+	map,
+	maybeToAsync,
 	pick, 
 	prop,
-	compose,
-	maybeToAsync,
-	chain
+	safe,
+	tap
 } = require('crocks')
-const { create } = require('../../database')
+const userController = require('../controller/user')
+const { hash, compare } = require('../crypto')
+const { sign, verify } = require('../jwt')
+const { create, find, findById, removeById } = require('../../database')
+// asyncProp :: String -> String -> Async e a
+const asyncProp = curry((propName, errorText) => 
+	maybeToAsync(
+		new Error(errorText), 
+		compose(chain(prop(propName)), safe(isObject))
+	))
 
-const insertUser = (data) => {
-	const getName = maybeToAsync(
-		new Error('Name is required'),
-		compose(chain(prop('name')), safe(isObject))
-	)
-	const getPass = maybeToAsync(
-		new Error('Password is required'),
-		compose(chain(prop('password')), safe(isObject))
-	)
-	const name = getName(data)
-	const pass = getPass(data)
-	return Async.of(curry((name, password) => ({name, password})))
-		.ap(name)
-		.ap(pass)
-		.chain(create('User'))
-		.map(user => ({_id: user._id}))
-}
+// getUser :: a -> Async e User
+const getUser = input => Async.of(curry((name, password) => ({name, password})))
+		.ap(asyncProp('name', 'Name is required', input))
+		.ap(asyncProp('password', 'Password is required', input))
 
-const routes = app => Async((rej, res) => {
-	app.post('/v1/user/register', (req, res) => {
-		console.log(req.body)
-		insertUser(req.body)
+// findUserByToken :: String -> HttpHeaders -> User
+const findUserByToken = curry((secret, headers) => 
+	getIdFromToken(
+			secret,
+			asyncProp('authorization', 'Authorization is required', headers)
+		)
+		.chain(findById('User')))
+
+// fork :: m e a -> b -> c -> Unit
+const fork = curry((async, req, res) => 
+	async.fork(
+		error => {
+			console.error(error)
+			res.status(error.status || 500).json({error: error.message})
+		},
+		result => res.json(result)))
+// routes :: Application -> String -> String -> Async e a
+const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {
+	const api = '/v' + apiVersion
+
+	app.post(api + '/login/', (req, res) => fork(userController
+		.login(jwtSecret, req.body), req, res))
+
+	app.post(api + '/admin/', (req, res) => fork(userController
+		.insert('ADMIN', jwtSecret, req), req, res))
+		
+	app.post(api + '/user/', (req, res) => fork(userController
+		.insert('USER', jwtSecret, req), req, res))
+	
+	app.delete(api + '/user/', (req, res) => fork(userController
+		.removeSelf(req.user), req, res))
+	
+	app.delete(api + '/user/:id', (req, res) => fork(userController
+		.remove(req.user, req.params.id), req, res))
+
+	app.get(api + '/user/', (req, res) => {
+		findUserByToken(jwtSecret, req.headers)
 			.fork(
-				err => res.status(500).json({error: err.message}),
-				id => {
-					
-					res.json(id)
-				}
+				err => res.status(err.status || 500).json({error: err.message}),
+				user => res.json(user)
 			)
 	})
+
 	app.get('/', (rej, res) => {
-		console.log('root')
 		res.send('Hello')
 	})
 	return res(app)
-})
+}))
 
 module.exports = routes

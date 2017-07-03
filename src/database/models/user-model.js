@@ -15,6 +15,13 @@ module.exports = {
 			required: [true, 'Password is required'],
 			minlength: [8, 'Password should be at least 8 characters long.'],
 			maxlength: [60, 'Password is to long'],
+		},
+		role: {
+			type: String,
+			enum: ['ROOT', 'ADMIN', 'USER'],
+			default: 'USER',
+			trim: true,
+			required: [true, 'Role is required']
 		}
 	}
 }
