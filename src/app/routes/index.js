@@ -19,33 +19,10 @@ const userController = require('../controller/user')
 const { hash, compare } = require('../crypto')
 const { sign, verify } = require('../jwt')
 const { create, find, findById, removeById } = require('../../database')
-// asyncProp :: String -> String -> Async e a
-const asyncProp = curry((propName, errorText) => 
-	maybeToAsync(
-		new Error(errorText), 
-		compose(chain(prop(propName)), safe(isObject))
-	))
-
-// getUser :: a -> Async e User
-const getUser = input => Async.of(curry((name, password) => ({name, password})))
-		.ap(asyncProp('name', 'Name is required', input))
-		.ap(asyncProp('password', 'Password is required', input))
-
-// findUserByToken :: String -> HttpHeaders -> User
-const findUserByToken = curry((secret, headers) => 
-	getIdFromToken(
-			secret,
-			asyncProp('authorization', 'Authorization is required', headers)
-		)
-		.chain(findById('User')))
-
 // fork :: m e a -> b -> c -> Unit
 const fork = curry((async, req, res) => 
 	async.fork(
-		error => {
-			console.error(error)
-			res.status(error.status || 500).json({error: error.message})
-		},
+		error => res.status(error.status || 500).json({error: error.message}),
 		result => res.json(result)))
 // routes :: Application -> String -> String -> Async e a
 const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {

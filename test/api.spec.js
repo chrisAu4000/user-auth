@@ -67,7 +67,7 @@ describe('end to end API', () => {
 				})
 		})
 	})
-	describe('POST /user', () => {
+	describe('As root-user i am able to', () => {
 		let rootToken = undefined
 		before((done) => {
 			const data = { name: 'admin', password: 'admin' }
@@ -91,7 +91,7 @@ describe('end to end API', () => {
 			.remove({role: {$ne: 'ROOT'}})
 		)
 
-		it('root should be able to create an admin', (done) => {
+		it('create an admin-user', (done) => {
 			const userdata = {
 				password: 'password',
 				name: 'admin-user'
@@ -115,7 +115,7 @@ describe('end to end API', () => {
 					.catch(err => appToTest.close(done.bind(this, err)))
 				})
 		})
-		it('root should be able to create an user', (done) => {
+		it('create an standard-user', (done) => {
 			const userdata = {
 				password: 'password',
 				name: 'username'
@@ -140,7 +140,85 @@ describe('end to end API', () => {
 					.catch(err => appToTest.close(done.bind(this, err)))
 				})
 		})
-		
+		it('not remove the root-user', (done) => {
+			request(appToTest)
+				.delete('/v1/user')
+				.set('Authorization', rootToken)
+				.expect(405)
+				.expect('Content-Type', /json/)
+				.end((err, res) => {
+					if (err) return done(err)
+					mongoose.model('User')
+						.find({role: 'ROOT'})
+						.then(docs => {
+							assert.equal(1, docs.length)
+							assert.equal('admin', docs[0].name)
+							assert.equal('ROOT', docs[0].role)
+							done()
+						})
+						.catch(err => appToTest.close(done.bind(this, err)))
+				})
+		})
+		it('remove an admin-user', (done) => {
+			const testAdmin = {name: 'test-admin', password: 'password'}
+			request(appToTest)
+				.post('/v1/admin/')
+				.set('Content-Type', 'application/json')
+				.set('Authorization', rootToken)
+				.send(testAdmin)
+				.expect(200)
+				.expect('Content-Type', /json/)
+				.end((err, res) => {
+					if (err) return done(err)
+					assert.isDefined(res.body._id)
+					const userIdToRemove = res.body._id
+					request(appToTest)
+						.delete('/v1/user/' + userIdToRemove)
+						.set('Authorization', rootToken)
+						.expect(200)
+						.end((err, res) => {
+							if (err) return done(err)
+							assert.equal(userIdToRemove, res.body._id)
+							mongoose.model('User')
+								.find({name: 'test-admin'})
+								.then(docs => {
+									assert.equal(0, docs.length)
+									done()
+								})
+								.catch(err => appToTest.close(done.bind(this, err)))
+						})
+				})
+		})
+		it('remove an standard-user', (done) => {
+			const testUser = {name: 'test', password: 'password'}
+			request(appToTest)
+				.post('/v1/user/')
+				.set('Content-Type', 'application/json')
+				.set('Authorization', rootToken)
+				.send(testUser)
+				.expect(200)
+				.expect('Content-Type', /json/)
+				.end((err, res) => {
+					if (err) return done(err)
+					assert.isDefined(res.body._id)
+					const userIdToRemove = res.body._id
+					request(appToTest)
+						.delete('/v1/user/' + userIdToRemove)
+						.set('Authorization', rootToken)
+						.expect(200)
+						.end((err, res) => {
+							if (err) return done(err)
+							assert.equal(userIdToRemove, res.body._id)
+							mongoose.model('User')
+								.find({name: 'test'})
+								.then(docs => {
+									assert.equal(0, docs.length)
+									done()
+								})
+								.catch(err => appToTest.close(done.bind(this, err)))
+						})
+				})
+		})
 	})
 
 })

@@ -16,7 +16,11 @@ const { serverError } = require('../../error')
 
 // removeSelf :: HttpHeaders -> Id
 const removeSelf = user => 
-	asyncProp('_id', 'DELETE: Users _id is required', user)
+	Async.of(user)
+		.chain(user => user.role === 'ROOT'
+			? Async.Rejected(serverError(405, 'Cannot remove root-user'))
+			: Async.of(user))
+		.chain(asyncProp('_id', 'DELETE: Users _id is required'))
 		.chain(removeById('User'))
 		.map(user => ({_id: user._id}))
 
