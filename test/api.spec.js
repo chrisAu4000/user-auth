@@ -55,15 +55,9 @@ describe('end to end API', () => {
 				.expect('Content-Type', /json/)
 				.end((err, res) => {
 					if (err) appToTest.close(() => { done(err) })
-					mongoose.model('User').find({})
-						.then(docs => {
-							appToTest.close(() => {
-								assert.equal(docs.length, 1, 'User was not inserted.')
-								assert.equal(docs[0].role, 'ROOT')
-								done()
-							})
-						})
-						.catch(done)
+					assert.isDefined(res.body.token)
+					assert.isUndefined(res.body.error)
+					done()
 				})
 		})
 		it('should return access denied', (done) => {
