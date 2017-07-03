@@ -68,6 +68,15 @@ const findById = curry((model, id) =>
 			: rej(serverError(404, 'Cannot find ' + model + ' with _id: ' + id)))
 		.catch(compose(rej, serverError(500)))
 	))
+const updateById = curry((model, id, data) => 
+	Async((rej, res) => mongoose.model(model)
+		.findByIdAndUpdate(id, {$set: data})
+			.then(doc => doc 
+				? res(Object.assign({}, doc._doc, data))
+				: rej(serverError(404, 'Cannot find document with _id: ' + id))
+			)
+			.catch(rej)
+	))
 // removeById :: String -> String -> Async e a
 const removeById = curry((model, id) => 
 	Async((rej, res) => mongoose.model(model).findByIdAndRemove(id)
@@ -78,10 +87,11 @@ const removeById = curry((model, id) =>
 	))
 module.exports = {
 	connectDatabase,
-	find,
-	findAll,
 	create,
 	createUnique,
+	find,
+	findAll,
 	findById,
+	updateById,
 	removeById
 }

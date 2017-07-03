@@ -12,28 +12,9 @@ const db = require('../src/database')
 // to test https
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-const deleteModels = () => Promise.all(Object.keys(mongoose.connection.models).map(function(model) {
-		delete mongoose.connection.models[model]
-		return Promise.resolve()
-}))
+before(() => mockgoose.prepareStorage())
 
-before((done) => {
-	mockgoose
-	.prepareStorage()
-	.then(done)
-	.catch(done)
-})
-
-// after((done) => {
-// 	mongoose.connection.model('User').remove({})
-// 	.then(() => mockgoose.reset())
-// 	.then(deleteModels)
-// 	.then(() => mongoose.connection.db.dropDatabase())
-// 	.then(() => mongoose.connection.close(done))
-// 	.catch(done)
-// })
-
-describe('end to end API', () => {
+describe('API', () => {
 	let appToTest 
 	before((done) => {
 		app(config).fork(
@@ -44,7 +25,7 @@ describe('end to end API', () => {
 			})
 	})
 	
-	describe('login root-user', () => {
+	describe('login', () => {
 		it('should login the root-user', (done) => {
 			const data = { name: 'admin', password: 'admin' }
 			request(appToTest)
@@ -76,7 +57,8 @@ describe('end to end API', () => {
 				})
 		})
 	})
-	describe('As root-user i am able to', () => {
+
+	describe('As root-user ', () => {
 		let rootToken = undefined
 		before((done) => {
 			const data = { name: 'admin', password: 'admin' }
@@ -228,46 +210,21 @@ describe('end to end API', () => {
 						})
 				})
 		})
-		// it('update my own credentials', (done) => {
-		// 	const data = {name: 'newRoot', password: 'otherPw'}
-		// 	request(appToTest)
-		// 		.patch('/v1/user/')
-		// 		.set('Content-Type', 'application/json')
-		// 		.set('Authorization', rootToken)
-		// 		.send(testUser)
-		// })
+		it('update my own name', (done) => {
+			const data = {name: 'newRoot'}
+			request(appToTest)
+				.patch('/v1/user/')
+				.set('Content-Type', 'application/json')
+				.set('Authorization', rootToken)
+				.send(data)
+				.expect(200)
+				.end((err, res) => {
+					if (err) return done(err)
+					assert.equal('newRoot', res.body.name)
+					assert.isDefined(res.body.password)
+					done()
+				})
+		})
 	})
 
 })
-// describe('GET /user/:id', () => {
-// 	it('returns a user', (done) => {
-// 		const expectedBody = {
-// 			id: '1', 
-// 			name: 'John Math' 
-// 		}
-// 		app(serverconfig)
-// 			.fork(
-// 				err => done(err),
-// 				app => {
-// 					request(app) 
-// 						.get('/user')
-// 						.expect(200)
-// 						.end((err, res) => {
-// 							if (err) throw err
-// 							app.close()
-// 							done()
-// 						})
-					// 	.get('/user')
-					// 	.set('Accept', 'application/json')
-					// 	.expect(200)
-					// 	.expect('Content-Type', /json/)
-					// 	.end((err, res) => {
-					// 		if (err) return done(err)
-					// 		app.http.close()
-					// 		app.https.close(done)
-					// 	}) 
-					
-// 				}
-// 			)
-// 	})
-// })

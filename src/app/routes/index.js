@@ -43,6 +43,9 @@ const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {
 	app.delete(api + '/user/:id', (req, res) => fork(userController
 		.remove(req.user, req.params.id), req, res))
 
+	app.patch(api + '/user/', (req, res) => fork(userController
+		.updateSelf(req.user, req.body), req, res))
+	
 	app.get(api + '/user/', (req, res) => {
 		findUserByToken(jwtSecret, req.headers)
 			.fork(
