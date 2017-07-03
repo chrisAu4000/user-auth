@@ -54,7 +54,7 @@ describe('end to end API', () => {
 				.expect(200)
 				.expect('Content-Type', /json/)
 				.end((err, res) => {
-					if (err) app.close(() => { throw err })
+					if (err) appToTest.close(() => { done(err) })
 					mongoose.model('User').find({})
 						.then(docs => {
 							appToTest.close(() => {
@@ -64,6 +64,21 @@ describe('end to end API', () => {
 							})
 						})
 						.catch(done)
+				})
+		})
+		it('should return access denied', (done) => {
+			const data = { name: 'admin', password: 'wrong' }
+			request(appToTest)
+				.post('/v1/login/')
+				.set('Content-Type', 'application/json')
+				.send(data)
+				.expect(403)
+				.expect('Content-Type', /json/)
+				.end((err, res) => {
+					if (err) appToTest.close(() => { done(err) })
+					assert.isUndefined(res.body.token)
+					assert.isDefined(res.body.error)
+					done()
 				})
 		})
 	})
@@ -219,6 +234,14 @@ describe('end to end API', () => {
 						})
 				})
 		})
+		// it('update my own credentials', (done) => {
+		// 	const data = {name: 'newRoot', password: 'otherPw'}
+		// 	request(appToTest)
+		// 		.patch('/v1/user/')
+		// 		.set('Content-Type', 'application/json')
+		// 		.set('Authorization', rootToken)
+		// 		.send(testUser)
+		// })
 	})
 
 })
