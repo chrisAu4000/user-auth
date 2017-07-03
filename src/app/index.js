@@ -1,60 +1,143 @@
-const { Async, chain, constant, curry, identitiy, maybeToAsync, prop } = require('crocks')
-const { readFile } = require('./file-system')
+const { 
+	Async,
+	List,
+	ap,
+	assign,
+	chain, 
+	constant,
+	compose, 
+	curry,
+	identity,
+	isEmpty,
+	map,
+	maybeToAsync,
+	not,
+	prop,
+	resultToAsync, 
+	safe,
+	tap,
+} = require('crocks')
+const { readFile, readJson } = require('./file-system')
 const Express = require('express')
 const express = Express()
 const https = require('https')
 const path = require('path')
-const certPath = path.join(__dirname, '../../server.crt')
-const keyPath = path.join(__dirname, '../../server.key')
-const routes = require('./routes')
+const setupRoutes = require('./routes')
 const morgan = require('morgan')
 const bodyParser = require('body-parser')
-const { connectDatabase } = require('../database')
-
-// credentials :: a -> a -> Async Error Credentials
-const credentials = //curry((certPath, keyPath) =>
-	Async.of(cert => key => ({cert, key}))
-		.ap(readFile(certPath))
-		.ap(readFile(keyPath))
-	// )
-// app :: Async Error Express
-const app = 
-	Async.of(express)
-// createHTTPS :: Credentials -> Express -> Async Error (Credentials -> Express) -> Server
-const createHTTPS = 
-	Async.of(curry((credentials, app) => https.createServer(credentials, app)))
-// listen :: Number -> IP -> Number -> Server
-const listen = curry((port, hostname, backlog, server) => Async((rej, res) => {
-	server.on('error', rej)
-	server.listen(port, hostname, backlog, () => res(server))
-}))
-// middleware :: Express -> Async Error Express
-const middleware = app => Async((rej, res) => {
+const expressJWT = require('express-jwt')
+const { connectDatabase, create, findAll, removeById } = require('../database')
+const { hash } = require('./crypto')
+// TYPES
+// HttpCredentials :: String -> String -> HttpCredentials
+const HttpCredentials = curry((cert, key) => ({cert, key}))
+// ConnectionCredentials :: Number -> Number -> Server -> ConnectionCredentials
+const ConnectionCredentials = curry((port, backlog, server) => ({port, backlog, server}))
+// Application :: Async Error Application
+const app = Async.of(express)
+// FUNCTIONS
+// asyncProp :: String -> String -> a -> Async e b
+const asyncProp = curry((propName, errText, resource) => 
+	maybeToAsync(new Error(errText), prop(propName, resource)))
+// createHTTPS :: HttpsCredentials -> Express -> Async Error (HttpsCredentials -> Express) -> Server
+const createHTTPS = Async.of(
+	curry((httpsCredentials, app) => https.createServer(httpsCredentials, app)))
+// setupHttpsConfig :: String -> String -> Async e HttpsCredentials
+const setupHttpsConfig = curry((certPath, keyPath) => 
+	Async.of(HttpCredentials)
+		.ap(certPath.chain(readFile))
+		.ap(keyPath.chain(readFile)))
+// setupMiddleware :: Express -> Async Error Express
+const setupMiddleware = curry((secret, app) => secret.map(_secret => {
 	app.use(morgan('dev'))
 	app.use(bodyParser.urlencoded({extended: false}))
 	app.use(bodyParser.json())
-	return res(app)
+	app.use(expressJWT({ 
+		secret: _secret, 
+		getToken: function fromHeaderOrQuerystring (req) {
+			if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
+				return req.headers.authorization.split(' ')[1];
+			} else if (req.query && req.query.token) {
+				return req.query.token;
+			}
+    	return null;
+  	}
+	})
+	.unless({ path: [
+		'/v1/login/',
+		/^\/v1\/user\/register\//g
+	]
+	}))
+	return app
+}))
+// setupApplication :: Application -> Application
+const setupApplication = curry((apiVersion, jwtSecret, application) => 	
+	application
+		.chain(setupMiddleware(jwtSecret))
+		.map(setupRoutes)
+		.chain(fn => apiVersion.map(fn))
+		.chain(fn => jwtSecret.map(fn))
+		.chain(identity)
+	)
+// setupDatabaseConnection :: Async e String -> Server -> Async e Server 
+const setupDatabaseConnection = curry((dbConnection, server) => dbConnection
+	.chain(connectDatabase)
+	.map(constant(server)))
+// listen :: ConnectionCredentials -> Server
+const listen = connectionCredentials => Async((rej, res) => {
+	connectionCredentials.server.on('error', rej)
+	process.once('SIGINT', () => {
+		connectionCredentials.server.close(() => {
+			console.log('Server default connection disconnected through app termination')
+			process.exit(0)
+		})
+	})
+	connectionCredentials.server.listen(
+		connectionCredentials.port,
+		null,
+		connectionCredentials.backlog,
+		() => res(connectionCredentials.server)
+	)
 })
-
-const application = (params) => {
-	const portHTTPS = maybeToAsync(new Error('Please set a env.PORT_WEB'), prop('port', params))
-	const hostname = maybeToAsync(new Error('Please set a env.HOST'), prop('host', params))
-	const backlog = Async.of(prop('backlog', params).option(511))
-	const listenHTTPS = portHTTPS
-		.map(listen)
-		.ap(hostname)
+// closeServer :: Server -> Error -> m Error
+const closeServer = curry((server, error) => Async(
+	(rej, res) => server.close(rej.bind(null, error))))
+// connectServer :: Number -> Number -> Server -> Async e Server
+const connectServer = curry((port, backlog, server) => 
+	Async.of(ConnectionCredentials)
+		.ap(port)
 		.ap(backlog)
-		
+		.ap(Async.of(server))
+		.chain(listen)
+		.bimap(closeServer(server), Async.of)
+		.chain(identity))
+//
+const prefillDatabase = curry((jsonPath, server) => {
+	return findAll('User')
+		.chain(list => list.length === 0
+			? Async.of(list)
+			: Async.Rejected()
+		)
+		.chain(constant(readJson(jsonPath, 'utf-8')))
+		.chain(hash('password'))
+		.map(assign({role: 'ROOT'}))
+		.chain(create('User'))
+		.coalesce(constant(server), constant(server))
+})
+const application = (params) => {
+	const port = asyncProp('port', 'Please set a env.PORT_WEB', params)
+	const backlog = Async.of(prop('backlog', params).option(511))
+	const certPath = asyncProp('certPath', 'Please set a env.CERT', params)
+	const keyPath = asyncProp('keyPath', 'Please set a env.KEY', params)
+	const dbConnection = asyncProp('dbConn', 'Please set a env.DB_CONN', params)
+	const jwtSecret = asyncProp('jwtSecret', 'Please set a env.JWT_SEC', params)
+	const apiVersion = asyncProp('apiVersion', 'Please set a env.API_V', params)
 	return createHTTPS
-		.ap(credentials)
-		.ap(app
-			.chain(middleware)
-			.chain(routes)
-		)
-		.chain(server => connectDatabase(params.dbConn).map(constant(server)))
-		.chain(server => listenHTTPS
-			.chain(listenOn => listenOn(server))
-		)
+		.ap(setupHttpsConfig(certPath, keyPath))
+		.ap(setupApplication(apiVersion, jwtSecret, app))
+		.chain(setupDatabaseConnection(dbConnection))
+		.chain(prefillDatabase(path.join(__dirname, 'data.json')))
+		.chain(connectServer(port, backlog))
 }
 
 module.exports = application
