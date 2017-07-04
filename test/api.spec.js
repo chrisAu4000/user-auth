@@ -9,6 +9,26 @@ const Mockgoose = require('mockgoose').Mockgoose;
 const mockgoose = new Mockgoose(mongoose);
 const db = require('../src/database')
 
+const { 
+	correctRootLogin, 
+	incorrectPasswordLogin,
+	unknownUsernameLogin,
+	noPasswordLogin,
+	noUsernameLogin,
+	emptyLogin,
+} = require('./controller/user/login-test')
+const {
+	insertAdmin,
+	insertUser
+} = require('./controller/user/insert-user-test')
+const {
+	removeRootUser,
+	removeAdminUser,
+	removeUser,
+} = require('./controller/user/remove-user-test')
+const {
+	updateRootUser,
+} = require('./controller/user/update-user-test')
 // to test https
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
@@ -27,34 +47,22 @@ describe('API', () => {
 	
 	describe('login', () => {
 		it('should login the root-user', (done) => {
-			const data = { name: 'admin', password: 'admin' }
-			request(appToTest)
-				.post('/v1/login/')
-				.set('Content-Type', 'application/json')
-				.send(data)
-				.expect(200)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) appToTest.close(() => { done(err) })
-					assert.isDefined(res.body.token)
-					assert.isUndefined(res.body.error)
-					done()
-				})
+			correctRootLogin(appToTest, done);
 		})
 		it('should return access denied', (done) => {
-			const data = { name: 'admin', password: 'wrong' }
-			request(appToTest)
-				.post('/v1/login/')
-				.set('Content-Type', 'application/json')
-				.send(data)
-				.expect(403)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) appToTest.close(() => { done(err) })
-					assert.isUndefined(res.body.token)
-					assert.isDefined(res.body.error)
-					done()
-				})
+			incorrectPasswordLogin(appToTest, done)
+		})
+		it('should return not found', (done) => {
+			unknownUsernameLogin(appToTest, done)
+		})
+		it('should return bad request', (done) => {
+			noPasswordLogin(appToTest, done)
+		})
+		it('should return bad request', (done) => {
+			noUsernameLogin(appToTest, done)
+		})
+		it('should return bad request', (done) => {
+			emptyLogin(appToTest, done)
 		})
 	})
 
@@ -83,147 +91,22 @@ describe('API', () => {
 		)
 
 		it('create an admin-user', (done) => {
-			const userdata = {
-				password: 'password',
-				name: 'admin-user'
-			}
-			request(appToTest)
-				.post('/v1/admin/')
-				.set('Content-Type', 'application/json')
-				.set('Authorization', rootToken)
-				.send(userdata)
-				.expect(200)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) appToTest.close(() => done(err))
-					assert.equal('admin-user', res.body.name)
-					assert.isDefined(res.body._id)
-					mongoose.model('User').findById(res.body._id).then(doc => {
-						assert.equal('admin-user', doc.name)
-						assert.equal(res.body._id, doc._id)
-						done()
-					})
-					.catch(err => appToTest.close(done.bind(this, err)))
-				})
+			insertAdmin(appToTest, rootToken, done)
 		})
 		it('create an standard-user', (done) => {
-			const userdata = {
-				password: 'password',
-				name: 'username'
-			}
-			request(appToTest)
-				.post('/v1/user/')
-				.set('Content-Type', 'application/json')
-				.set('Authorization', rootToken)
-				.send(userdata)
-				.expect(200)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) appToTest.close(() => done(err))
-					assert.equal('username', res.body.name)
-					assert.isDefined(res.body._id)
-					mongoose.model('User').findById(res.body._id).then(doc => {
-						assert.equal('username', doc.name)
-						assert.equal('USER', doc.role)
-						assert.equal(res.body._id, doc._id)
-						done()
-					})
-					.catch(err => appToTest.close(done.bind(this, err)))
-				})
+			insertUser(appToTest, rootToken, done)
 		})
 		it('not remove the root-user', (done) => {
-			request(appToTest)
-				.delete('/v1/user')
-				.set('Authorization', rootToken)
-				.expect(405)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) return done(err)
-					mongoose.model('User')
-						.find({role: 'ROOT'})
-						.then(docs => {
-							assert.equal(1, docs.length)
-							assert.equal('admin', docs[0].name)
-							assert.equal('ROOT', docs[0].role)
-							done()
-						})
-						.catch(err => appToTest.close(done.bind(this, err)))
-				})
+			removeRootUser(appToTest, rootToken, done)
 		})
 		it('remove an admin-user', (done) => {
-			const testAdmin = {name: 'test-admin', password: 'password'}
-			request(appToTest)
-				.post('/v1/admin/')
-				.set('Content-Type', 'application/json')
-				.set('Authorization', rootToken)
-				.send(testAdmin)
-				.expect(200)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) return done(err)
-					assert.isDefined(res.body._id)
-					const userIdToRemove = res.body._id
-					request(appToTest)
-						.delete('/v1/user/' + userIdToRemove)
-						.set('Authorization', rootToken)
-						.expect(200)
-						.end((err, res) => {
-							if (err) return done(err)
-							assert.equal(userIdToRemove, res.body._id)
-							mongoose.model('User')
-								.find({name: 'test-admin'})
-								.then(docs => {
-									assert.equal(0, docs.length)
-									done()
-								})
-								.catch(err => appToTest.close(done.bind(this, err)))
-						})
-				})
+			removeAdminUser(appToTest, rootToken, done)
 		})
 		it('remove an standard-user', (done) => {
-			const testUser = {name: 'test', password: 'password'}
-			request(appToTest)
-				.post('/v1/user/')
-				.set('Content-Type', 'application/json')
-				.set('Authorization', rootToken)
-				.send(testUser)
-				.expect(200)
-				.expect('Content-Type', /json/)
-				.end((err, res) => {
-					if (err) return done(err)
-					assert.isDefined(res.body._id)
-					const userIdToRemove = res.body._id
-					request(appToTest)
-						.delete('/v1/user/' + userIdToRemove)
-						.set('Authorization', rootToken)
-						.expect(200)
-						.end((err, res) => {
-							if (err) return done(err)
-							assert.equal(userIdToRemove, res.body._id)
-							mongoose.model('User')
-								.find({name: 'test'})
-								.then(docs => {
-									assert.equal(0, docs.length)
-									done()
-								})
-								.catch(err => appToTest.close(done.bind(this, err)))
-						})
-				})
+			removeUser(appToTest, rootToken, done)
 		})
 		it('update my own name', (done) => {
-			const data = {name: 'newRoot'}
-			request(appToTest)
-				.patch('/v1/user/')
-				.set('Content-Type', 'application/json')
-				.set('Authorization', rootToken)
-				.send(data)
-				.expect(200)
-				.end((err, res) => {
-					if (err) return done(err)
-					assert.equal('newRoot', res.body.name)
-					assert.isDefined(res.body.password)
-					done()
-				})
+			updateRootUser(appToTest, rootToken, done)
 		})
 	})
 

@@ -22,7 +22,10 @@ const { create, find, findById, removeById } = require('../../database')
 // fork :: m e a -> b -> c -> Unit
 const fork = curry((async, req, res) => 
 	async.fork(
-		error => res.status(error.status || 500).json({error: error.message}),
+		error => {
+			!error.status || error.status === 500 && console.error(error)
+			res.status(error.status || 500).json({error: error.message})
+		},
 		result => res.json(result)))
 // routes :: Application -> String -> String -> Async e a
 const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {

@@ -11,7 +11,7 @@ const login = curry((secret, body) =>
 		.chain(find('User'))
 		.map(List.fromArray)
 		.map(head)
-		.chain(maybeToAsync(new Error('Cannot find User with name ' + body.name)))
+		.chain(maybeToAsync(serverError(404, 'Cannot find User with name ' + body.name)))
 		.chain(user => compare(body.password, user.password)
 			.chain(eitherToAsync)
 			.bimap(
