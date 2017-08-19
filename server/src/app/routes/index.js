@@ -15,6 +15,7 @@ const {
 	safe,
 	tap
 } = require('crocks')
+const view = require('../view')
 const userController = require('../controller/user')
 const { hash, compare } = require('../crypto')
 const { sign, verify } = require('../jwt')
@@ -30,6 +31,8 @@ const fork = curry((async, req, res) =>
 // routes :: Application -> String -> String -> Async e a
 const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {
 	const api = '/v' + apiVersion
+	
+	app.get(api + '/', (req, res) => view(req, res).fork(console.error, console.log))
 
 	app.post(api + '/login/', (req, res) => fork(userController
 		.login(jwtSecret, req.body), req, res))
@@ -57,9 +60,9 @@ const routes = curry((app, apiVersion, jwtSecret) => Async((rej, res) => {
 			)
 	})
 
-	app.get('/', (rej, res) => {
-		res.send('Hello')
-	})
+	// app.get('/', (rej, res) => {
+	// 	res.send('Hello')
+	// })
 	return res(app)
 }))
 

@@ -64,7 +64,9 @@ const setupMiddleware = curry((secret, app) => secret.map(_secret => {
   	}
 	})
 	.unless({ path: [
+		'/v1/',
 		'/v1/login/',
+		'/v1/%PUBLIC_URL%/favicon.ico',
 		/^\/v1\/user\/register\//g
 	]
 	}))
