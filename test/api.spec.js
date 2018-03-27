@@ -3,11 +3,11 @@ dotenv.load();
 const { assert } = require('chai')
 const request = require('supertest')
 const config = require('../config')
-const app = require('../src/app')
+const app = require('../server/src/app')
 const mongoose = require('mongoose');
 const Mockgoose = require('mockgoose').Mockgoose;
 const mockgoose = new Mockgoose(mongoose);
-const db = require('../src/database')
+const db = require('../server/src/database')
 
 const { 
 	correctRootLogin, 

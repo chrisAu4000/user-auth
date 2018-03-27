@@ -2,7 +2,7 @@ const dotenv = require('dotenv')
 dotenv.load();
 const config = require('../config')
 const { assert } = require('chai')
-const app = require('../src/app')
+const app = require('../server/src/app')
 
 describe('Application', () => {
 	it('should be function', () => {

@@ -1,4 +1,4 @@
-const { Async, curry } = require('crocks')
+const { Async, curry, assign } = require('crocks')
 const { verify } = require('../../jwt')
 const { serverError } = require('../../error')
 // forbidden :: Error
@@ -30,6 +30,10 @@ const applyRights = curry((method, role, user) => Async((rej, res) => {
 }))
 // isAllowed :: String -> String -> String -> a -> Async e b
 const isAllowed = curry((method, role, user) => 
-	applyRights(method, role, user))
+	Async
+		.of(user)
+		.map(user => user.role ? user : assign({ role: "UNKNOWN"}, user))
+		.chain(applyRights(method, role))
+	)
 
 module.exports = { isAllowed }

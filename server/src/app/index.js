@@ -1,3 +1,4 @@
+const bodyParser = require('body-parser')
 const { 
 	Async,
 	List,
@@ -20,12 +21,14 @@ const {
 const { readFile, readJson } = require('./file-system')
 const Express = require('express')
 const express = Express()
+const expressJWT = require('express-jwt')
 const https = require('https')
+const morgan = require('morgan')
 const path = require('path')
 const setupRoutes = require('./routes')
-const morgan = require('morgan')
-const bodyParser = require('body-parser')
-const expressJWT = require('express-jwt')
+// const webpack = require('webpack')
+// const webpackConfig = require('../../../webpack.dev.config.js')
+// const webpackMiddleware = require('webpack-dev-middleware')
 const { connectDatabase, create, findAll, removeById } = require('../database')
 const { hash } = require('./crypto')
 // TYPES
@@ -52,6 +55,13 @@ const setupMiddleware = curry((secret, app) => secret.map(_secret => {
 	app.use(morgan('dev'))
 	app.use(bodyParser.urlencoded({extended: false}))
 	app.use(bodyParser.json())
+	app.use(function (req, res, next) {
+		res.header("Access-Control-Allow-Origin", "*");
+		res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+		next();
+	});
+
+	// app.use(webpackMiddleware(webpack(webpackConfig)))
 	app.use(expressJWT({ 
 		secret: _secret, 
 		getToken: function fromHeaderOrQuerystring (req) {
@@ -67,7 +77,7 @@ const setupMiddleware = curry((secret, app) => secret.map(_secret => {
 		'/v1/',
 		'/v1/login/',
 		'/v1/%PUBLIC_URL%/favicon.ico',
-		/^\/v1\/user\/register\//g
+		/^\/v1\/user\//g
 	]
 	}))
 	return app

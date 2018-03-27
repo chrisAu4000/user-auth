@@ -1,5 +1,5 @@
 const { assert } = require('chai')
-const { readFile, writeFile} = require('../src/app/file-system')
+const { readFile, writeFile} = require('../server/src/app/file-system')
 const path = require('path')
 const fs = require('fs')
 
